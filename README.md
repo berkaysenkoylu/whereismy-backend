@@ -1,0 +1,1 @@
+Backend for "where is my" app. The available services will be noted here along with the descriptions of their functionalities later.
