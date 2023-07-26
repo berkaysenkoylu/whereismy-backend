@@ -5,7 +5,13 @@ const bodyParser = require('body-parser');
 const handleErrors = require('./middleware/handleErrors');
 const sequelize = require('./utils/database');
 
+// Models
+const User = require('./models/user');
+const Post = require('./models/post');
+
+// Routes
 const userRoutes = require('./routes/user');
+const postRoutes = require('./routes/post');
 
 const app = express();
 
@@ -21,8 +27,13 @@ app.use(bodyParser.urlencoded({ extended: false }));
 
 // NORMAL ROUTES
 app.use('/api/user', userRoutes);
+app.use('/api/post', postRoutes);
 
 app.use(handleErrors);
+
+// ASSOCIATIONS
+Post.belongsTo(User, { constraints: true, onDelete: 'CASCADE' });
+User.hasMany(Post);
 
 sequelize.sync().then((result: any) => {
     console.log('Connection has been established successfully.');

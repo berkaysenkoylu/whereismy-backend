@@ -155,7 +155,7 @@ exports.loginUser = (req: any, res: any, next: any) => {
 
     let userData = {} as UserType;
 
-    User.findOne({
+    User.unscoped().findOne({
         where: {
             email: email
         }

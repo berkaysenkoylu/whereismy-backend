@@ -127,7 +127,12 @@ const User = sequelize.define('user', {
 }, {
     freezeTableName: true,
     tableName: "users",
-    timestamps: false
+    timestamps: false,
+    defaultScope: {
+        attributes: {
+            exclude: ['password', 'resetToken', 'resetTokenExpiration']
+        }
+    }
 });
 
 User.beforeValidate((user: any, _: any) => {
