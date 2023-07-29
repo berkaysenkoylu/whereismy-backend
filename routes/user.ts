@@ -19,4 +19,8 @@ router.put('/:id', checkAuth, userController.editUserProfile);
 
 router.delete('/:id', checkAuth, userController.deleteUser);
 
+router.post('/request-password-reset', userController.requestPasswordReset);
+
+router.post('/password-reset', userController.resetPassword);
+
 module.exports = router;

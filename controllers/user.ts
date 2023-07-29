@@ -1,10 +1,19 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
+const sendgridTransport = require('nodemailer-sendgrid-transport');
 
 const User = require('../models/user');
 const inputValidation = require('../utils/validateInput');
 const utilityFunctions = require('../utils/utilityFunctions');
 import type { ErrorType, UserType } from '../types';
+
+const transporter = nodemailer.createTransport(sendgridTransport({
+    auth: {
+        api_key: process.env.SENDGRID_KEY
+    }
+}));
 
 // TODO Type tanımlamaları yapılmalı
 exports.getUserById = async (req: any, res: any, next: any) => {
@@ -330,4 +339,165 @@ exports.deleteUser = async (req: any, res: any, next: any) => {
             terminateAccount: false
         });
     }
+}
+
+exports.requestPasswordReset = (req: any, res: any, next: any) => {
+    const { email } = req.body;
+    const formData = {
+        email
+    };
+
+    // Check if any field is empty
+    if(!inputValidation.isFieldNotEmpty(formData)) {
+        let error: ErrorType = new Error();
+        error.statusCode = 412;
+        error.message = 'You cannot leave empty fields!';
+
+        return next(error);
+    }
+
+    // Check of the email provided is valid
+    if(!inputValidation.isEmail(email)) {
+        let error: ErrorType = new Error();
+        error.statusCode = 412;
+        error.message = 'E-mail is not in a correct form!';
+
+        return next(error);
+    }
+
+    User.findOne({
+        where: {
+            email
+        }
+    }).then((fetchedUser: any) => {
+        if(!fetchedUser) {
+            let error: ErrorType  = new Error();
+            error.statusCode = 404;
+            error.message = 'There is no such user with that email found.'
+            
+            return next(error);
+        }
+
+        crypto.randomBytes(32, (err: any, buffer: any) => {
+            if(err) {
+                return res.status(500).json({
+                    message: 'Something went wrong',
+                    error: err
+                });
+            }
+
+            const token = buffer.toString('hex');
+
+            fetchedUser?.set({
+                resetToken: token,
+                resetTokenExpiration: Date.now() + 3600000
+            });
+
+            fetchedUser.save().then((result: any) => {
+                return transporter.sendMail({
+                    to: result.email,
+                    from: 'frobenius.doe@gmail.com',
+                    subject: '(DON\'T REPLY) Password reset',
+                    html: `
+                        <p>You requested a password reset</p>
+                        <p>Click this <a href="https://localhost:5000/auth/password-reset/${token}">link</a> to set your new password.</p>
+                        <p>If you are not the one who requested this reset, please disregard this e-mail.</p>
+                    `
+                }); 
+            }).then(() => {
+                return res.status(200).json({
+                    message: 'Password request has been sent'
+                });
+            }).catch((error: ErrorType) => {
+                if(!error.statusCode) {
+                    error.statusCode = 500;
+                }
+        
+                if(!error.message) {
+                    error.message = 'Something went wrong!';
+                }
+        
+                next(error);
+            });
+        });
+    }).catch((error: ErrorType) => {
+        if(!error.statusCode) {
+            error.statusCode = 500;
+        }
+
+        if(!error.message) {
+            error.message = 'Something went wrong!';
+        }
+
+        next(error);
+    });
+}
+
+exports.resetPassword = (req: any, res: any, next: any) => {
+    const { token } = req.body;
+
+    User.findOne({
+        where: {
+            resetToken: token
+        }
+    }).then((fetchedUser: any) => {
+        if(!fetchedUser) {
+            let error: ErrorType  = new Error();
+            error.statusCode = 404;
+            error.message = 'There is no such user exists!'
+            
+            return next(error);
+        }
+
+        if(fetchedUser.resetTokenExpiration < Date.now()) {
+            // Token expired
+            return res.status(400).json({
+                message: 'Your reset token has expired. Please request another one.'
+            });
+        }
+
+        // Check if the password is in a correct form
+        if(!inputValidation.isPasswordValid(req.body.password)) {
+            let error: ErrorType = new Error();
+            error.statusCode = 412;
+            error.message = 'Make sure to enter a valid password!';
+
+            return next(error);
+        }
+
+        bcrypt.hash(req.body.password, 12).then((hashedPassword: string) => {
+
+            fetchedUser.set({
+                password: hashedPassword,
+                resetToken: null,
+                resetTokenExpiration: null
+            });
+
+            return fetchedUser.save();
+        }).then((result: any) => {
+            return transporter.sendMail({
+                to: result.email,
+                from: 'frobenius.doe@gmail.com',
+                subject: '(DON\'T REPLY) Password reset',
+                html: `
+                    <p>Your password has been successfully reset!</p>
+                    <p>If you were not the one who did this reset, please get in contact with site administration.</p>
+                `
+            }); 
+        }).then(() => {
+            return res.status(200).json({
+                message: 'Password has been reset successfully.'
+            });
+        }).catch((error: ErrorType) => {
+            if(!error.statusCode) {
+                error.statusCode = 500;
+            }
+    
+            if(!error.message) {
+                error.message = 'Something went wrong!';
+            }
+    
+            next(error);
+        });
+    });
 }
