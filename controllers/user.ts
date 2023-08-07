@@ -236,9 +236,9 @@ exports.editUserProfile = (req: any, res: any, next: any) => {
         return next(error);
     }
 
-    const { firstname, lastname, email, username, password, avatarUrl, city } = req.body;
+    const { firstname, lastname, email, username, currentPassword, newPassword, city } = req.body;
     const formData = {
-        firstname, lastname, email, username, password, avatarUrl, city
+        firstname, lastname, email, username, currentPassword, newPassword, city
     };
 
     // Remove the empty fields
@@ -252,7 +252,7 @@ exports.editUserProfile = (req: any, res: any, next: any) => {
         return next(error);
     }
 
-    User.findByPk(id).then(async (fetchedUser: UserType) => {
+    User.unscoped().findByPk(id).then(async (fetchedUser: UserType) => {
         if (!fetchedUser) {
             let error: ErrorType = new Error();
             error.statusCode = 404;
@@ -261,12 +261,13 @@ exports.editUserProfile = (req: any, res: any, next: any) => {
             return next(error);
         }
 
-        const { password } = sanitizedFormData;
+        const { newPassword, currentPassword } = sanitizedFormData;
+        console.log(sanitizedFormData)
 
         // Check if the user wants to change the password as well.
-        if (password) {
+        if (currentPassword && newPassword) {
             // Check if the password is in a correct form
-            if(!inputValidation.isPasswordValid(password)) {
+            if(!inputValidation.isPasswordValid(newPassword)) {
                 let error: ErrorType = new Error();
                 error.statusCode = 412;
                 error.message = 'Make sure to enter a valid password!';
@@ -274,7 +275,19 @@ exports.editUserProfile = (req: any, res: any, next: any) => {
                 return next(error);
             }
 
-            const hashedPassword = await bcrypt.hash(password, 12);
+            const isPreviousPassCorrect = await bcrypt.compare(currentPassword, fetchedUser.password);
+
+            console.log(isPreviousPassCorrect)
+
+            if (!isPreviousPassCorrect) {
+                let error: ErrorType = new Error();
+                error.statusCode = 412;
+                error.message = 'Make sure to enter your current password correctly!';
+
+                return next(error);
+            }
+
+            const hashedPassword = await bcrypt.hash(newPassword, 12);
 
             sanitizedFormData = {
                 ...sanitizedFormData,
