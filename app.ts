@@ -1,7 +1,9 @@
 export {};
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const bodyParser = require('body-parser');
+const multer = require('multer');
 const handleErrors = require('./middleware/handleErrors');
 const sequelize = require('./utils/database');
 
@@ -24,6 +26,43 @@ app.use((req: any, res: any, next: any) => {
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
+
+// ============================================================ //
+
+const fileStorage = multer.diskStorage({
+    destination: (req: any, file: any, cb: any) => {
+        cb(null, 'assets');
+    },
+    filename: (req: any, file: any, cb: any) => {
+        cb(null, Date.now() + '-' + file.originalname);
+    }
+});
+
+const fileFilter = (req: any, file: any, cb: any) => {
+    if (
+        file.mimetype === 'image/png' ||
+        file.mimetype === 'image/jpg' ||
+        file.mimetype === 'image/jpeg' ||
+        file.mimetype === 'application/json'
+    ) {
+        cb(null, true);
+    } else {
+        cb(null, false);
+    }
+};
+
+app.use(
+    multer({ storage: fileStorage, fileFilter: fileFilter }).fields(
+        [
+            { name: 'userImage', maxCount: 1 },
+            { name: 'postImages', maxCount: 4 }
+        ]
+    )
+);
+
+app.use('/assets', express.static(path.join(__dirname, 'assets')));
+
+// ============================================================ //
 
 // NORMAL ROUTES
 app.use('/api/user', userRoutes);

@@ -7,7 +7,7 @@ const sendgridTransport = require('nodemailer-sendgrid-transport');
 const User = require('../models/user');
 const inputValidation = require('../utils/validateInput');
 const utilityFunctions = require('../utils/utilityFunctions');
-import type { ErrorType, UserType } from '../types';
+import type { ErrorType, UserType, UploadedFileType } from '../types';
 
 const transporter = nodemailer.createTransport(sendgridTransport({
     auth: {
@@ -221,6 +221,12 @@ exports.editUserProfile = (req: any, res: any, next: any) => {
     // Check authorization
     const { id } = req.params;
     const { userId } = req.userData;
+    const uploadedFiles = req?.files;
+    let uploadedUserImage: any;
+    
+    if (uploadedFiles) {
+        uploadedUserImage = uploadedFiles?.userImage[0] || {};
+    }
 
     if (id !== userId) {
         let error: ErrorType = new Error();
@@ -238,7 +244,7 @@ exports.editUserProfile = (req: any, res: any, next: any) => {
     // Remove the empty fields
     let sanitizedFormData = utilityFunctions.removeUndefinedValuesFromObject(formData);
 
-    if (!inputValidation.isFieldNotEmpty(sanitizedFormData)) {
+    if (!inputValidation.isFieldNotEmpty(sanitizedFormData) && !uploadedUserImage) {
         let error: ErrorType = new Error();
         error.statusCode = 412;
         error.message = 'You cannot leave empty fields!';
@@ -265,8 +271,6 @@ exports.editUserProfile = (req: any, res: any, next: any) => {
                 error.statusCode = 412;
                 error.message = 'Make sure to enter a valid password!';
 
-                console.log("ADASDASDASDASD")
-
                 return next(error);
             }
 
@@ -276,6 +280,15 @@ exports.editUserProfile = (req: any, res: any, next: any) => {
                 ...sanitizedFormData,
                 password: hashedPassword
             };
+        }
+
+        if (uploadedUserImage) {
+            // New file is uploaded. We need to delete the old one.
+            utilityFunctions.deleteFile(fetchedUser.avatarUrl);
+    
+            fetchedUser.set({
+                avatarUrl: (uploadedUserImage as UploadedFileType).path
+            });
         }
 
         fetchedUser?.set({
